@@ -23,7 +23,7 @@ tables==3.6.1
 tensorflow==2.3.1
 tensorflow-estimator==2.3.0
 tifffile==2020.7.4
-torch==1.13.0
+torch==1.11.0
 torch-tb-profiler==0.2.1
 torchvision~=0.12.0
 tsne-torch==1.0.1

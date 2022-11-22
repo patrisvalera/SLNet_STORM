@@ -128,36 +128,6 @@ class STORMDatasetFull(data.Dataset):
 
         return views_out
 
-    # TODO: needed?
-    @staticmethod
-    def extract_views(image, lenslet_coords, subimage_shape, debug=False):
-        half_subimg_shape = [subimage_shape[0] // 2, subimage_shape[1] // 2]
-        n_lenslets = lenslet_coords.shape[0]
-        stacked_views = torch.zeros(
-            size=[image.shape[0], image.shape[1], n_lenslets, subimage_shape[0], subimage_shape[1]],
-            device=image.device, dtype=image.dtype)
-
-        if debug:
-            debug_image = image.detach().clone()
-            max_img = image.float().cpu().max()
-        for nLens in range(n_lenslets):
-            # Fetch coordinates
-            currCoords = lenslet_coords[nLens, :]
-            if debug:
-                debug_image[:, :, currCoords[0] - 2:currCoords[0] + 2, currCoords[1] - 2:currCoords[1] + 2] = max_img
-            # Grab patches
-            lower_bounds = [currCoords[0] - half_subimg_shape[0], currCoords[1] - half_subimg_shape[1]]
-            lower_bounds = [max(lower_bounds[kk], 0) for kk in range(2)]
-            currPatch = image[:, :, lower_bounds[0]: currCoords[0] + half_subimg_shape[0],
-                        lower_bounds[1]: currCoords[1] + half_subimg_shape[1]]
-            stacked_views[:, :, nLens, -currPatch.shape[2]:, -currPatch.shape[3]:] = currPatch
-
-        if debug:
-            import matplotlib.pyplot as plt
-            plt.imshow(debug_image[0, 0, ...].float().cpu().detach().numpy())
-            plt.show()
-        return stacked_views
-
     @staticmethod
     def read_tiff_stack(filename, out_datatype=torch.float16):
         tiffarray = mtif.read_stack(filename, units='voxels')

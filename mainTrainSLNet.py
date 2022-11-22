@@ -1,16 +1,9 @@
-import torch
-import sys
-from PIL import Image
-
 from torch.utils import data
 from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast, GradScaler
-import torchvision as tv
 import torch.nn as nn
-import matplotlib.pyplot as plt
 import subprocess
-import numpy as np
 from datetime import datetime
 import argparse
 import math
@@ -23,16 +16,16 @@ from utils.misc_utils import *
 
 runs_dir = ""
 data_dir = ""
-main_folder = "STORMNet/"
-runs_dir = "STORMNet/runs/"
-data_dir = "STORMNet/"
+main_folder = "/space/valera/STORM"
+runs_dir = "/space/valera/STORM/runs"
+data_dir = "/space/valera/STORM/Datasets"
 # Real image 
 filename = "TODO"
 
-# TODO: change
+# TODO: change (at the moment the same tiff and different index)
 dataset_paths = {
-    'storm_train': f'{data_dir}/TODO/',
-    'storm_test': f'{data_dir}/TODO/',
+    'storm_train': f'{data_dir}/DeepSTORM_dataset',
+    'storm_test': f'{data_dir}/DeepSTORM_dataset',
 }
 
 dataset_to_use = 'storm_train'
@@ -48,14 +41,14 @@ parser.add_argument('--data_folder_test', nargs='?', default=dataset_paths[datas
 
 parser.add_argument('--files_to_store', nargs='+', default=[],
                     help='Relative paths of files to store in a zip when running this script, for backup.')
-parser.add_argument('--prefix', nargs='?', default="Fish2", help='Prefix string for the output folder.')
+parser.add_argument('--prefix', nargs='?', default="STORM", help='Prefix string for the output folder.')
 parser.add_argument('--checkpoint', nargs='?', default="", help='File path of checkpoint of previous run.')
 # Images related arguments
 parser.add_argument('--images_to_use', nargs='+', type=int, default=list(range(0, 90, 1)),
                     help='Indexes of images to train on.')
-parser.add_argument('--images_to_use_test', nargs='+', type=int, default=list(range(0, 90, 1)),
+parser.add_argument('--images_to_use_test', nargs='+', type=int, default=list(range(91, 181, 1)),
                     help='Indexes of images to test on.')
-parser.add_argument('--img_size', type=int, default=2160, help='Side size of input image; square preferred.')
+parser.add_argument('--img_size', type=int, default=256, help='Side size of input image; square preferred.')
 # Training arguments
 parser.add_argument('--batch_size', type=int, default=8, help='Training batch size.')
 parser.add_argument('--learning_rate', type=float, default=0.0001, help='Training learning rate.')
@@ -64,13 +57,13 @@ parser.add_argument('--validation_split', type=float, default=0.1, help='Which p
 parser.add_argument('--eval_every', type=int, default=10, help='How often to evaluate the testing/validation set.')
 parser.add_argument('--shuffle_dataset', type=int, default=1, help='Randomize training images 0 or 1')
 parser.add_argument('--use_bias', type=int, default=0, help='Use bias during training? 0 or 1')
-parser.add_argument('--plot_images', type=int, default=0, help='Plot results with matplotlib?')
+parser.add_argument('--plot_images', type=int, default=1, help='Plot results with matplotlib?')
 # Noise arguments
 parser.add_argument('--add_noise', type=int, default=0, help='Apply noise to images? 0 or 1')
 parser.add_argument('--signal_power_max', type=float, default=30 ** 2,
-                    help='Max signal value to control signal to noise ratio when applyting noise.')
+                    help='Max signal value to control signal to noise ratio when applying noise.')
 parser.add_argument('--signal_power_min', type=float, default=60 ** 2,
-                    help='Min signal value to control signal to noise ratio when applyting noise.')
+                    help='Min signal value to control signal to noise ratio when applying noise.')
 parser.add_argument('--norm_type', type=float, default=2,
                     help='Normalization type, see the normalize_type function for more info.')
 parser.add_argument('--dark_current', type=float, default=106, help='Dark current value of camera.')
@@ -84,7 +77,7 @@ parser.add_argument('--SL_mu_sum_constraint', type=float, default=1e-2,
 parser.add_argument('--weight_multiplier', type=float, default=0.5,
                     help='Initialization multiplier for weights, important parameter.')
 # SLNet config
-parser.add_argument('--temporal_shifts', nargs='+', type=int, default=[0, 49, 99],
+parser.add_argument('--temporal_shifts', nargs='+', type=int, default=[0, 1, 2],
                     help='Which frames to use for training and testing.')
 parser.add_argument('--use_random_shifts', nargs='+', type=int, default=0,
                     help='Randomize the temporal shifts to use? 0 or 1')
@@ -121,7 +114,7 @@ if len(args.checkpoint) > 0:
 args.shuffle_dataset = bool(args.shuffle_dataset)
 
 # Get commit number
-label = subprocess.check_output(["git", "describe", "--always"]).strip()
+# label = subprocess.check_output(["git", "describe", "--always"]).strip()
 save_folder = args.output_path + datetime.now().strftime('%Y_%m_%d__%H:%M:%S') + str(
     args.main_gpu[0]) + "_gpu__" + args.prefix
 
@@ -260,7 +253,7 @@ for epoch in range(start_epoch, args.max_epochs):
         perf_metrics['L1_SLNet'] = []
 
         # Training
-        for ix, (curr_img_stack, _) in enumerate(tqdm(curr_loader, desc='Optimizing images')):
+        for ix, curr_img_stack in enumerate(tqdm(curr_loader, desc='Optimizing images')):
             curr_img_stack = curr_img_stack.to(device)
             # Apply noise if needed, and only in the test set, as the train set comes from real images
             if args.add_noise == 1 and curr_train_stage != 'test':
@@ -457,7 +450,7 @@ for epoch in range(start_epoch, args.max_epochs):
                     curr_loader = data_loaders_save[curr_train_stage]
                     output_sparse_images = torch.zeros_like(curr_img_stack[0, 0, ...].unsqueeze(0).unsqueeze(0),
                                                             device='cpu').repeat(len(curr_loader), 1, 1, 1)
-                    for ix, (curr_img_stack, _) in enumerate(curr_loader):
+                    for ix, curr_img_stack in enumerate(curr_loader):
                         curr_img_stack = curr_img_stack.to(device)
                         with autocast():
                             # Predict dense part with the network
