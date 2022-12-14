@@ -20,7 +20,7 @@ main_folder = "/space/valera/STORM"
 runs_dir = "/space/valera/STORM/runs"
 data_dir = "/space/valera/STORM/Datasets"
 # Real image 
-filename = "TODO"
+filename = "/space/valera/STORM/Datasets/DeepSTORM_dataset/STORM_image/STORM_image_stack.tif"
 
 # TODO: change (at the moment the same tiff and different index)
 dataset_paths = {
@@ -77,7 +77,7 @@ parser.add_argument('--SL_mu_sum_constraint', type=float, default=1e-2,
 parser.add_argument('--weight_multiplier', type=float, default=0.5,
                     help='Initialization multiplier for weights, important parameter.')
 # SLNet config
-parser.add_argument('--temporal_shifts', nargs='+', type=int, default=[0, 1, 2],
+parser.add_argument('--temporal_shifts', nargs='+', type=int, default=[0, 49, 99],
                     help='Which frames to use for training and testing.')
 parser.add_argument('--use_random_shifts', nargs='+', type=int, default=0,
                     help='Randomize the temporal shifts to use? 0 or 1')
@@ -129,7 +129,7 @@ dataset = STORMDatasetFull(args.data_folder, img_shape=2 * [args.img_size], imag
 dataset_test = STORMDatasetFull(args.data_folder_test, img_shape=2 * [args.img_size],
                                 images_to_use=args.images_to_use_test, load_sparse=False)
 
-# Get normalization values 
+# Get normalization values
 max_images, max_images_sparse = dataset.get_max()
 mean_imgs, std_images = dataset.get_statistics()
 
@@ -263,6 +263,7 @@ for epoch in range(start_epoch, args.max_epochs):
                     1)).item()
                 curr_img_stack = signal_power / curr_max * curr_img_stack
                 # Add noise
+                # TODO: needed?
                 curr_img_stack = pytorch_shot_noise.add_camera_noise(curr_img_stack)
                 curr_img_stack = curr_img_stack.to(device)
 
@@ -446,18 +447,45 @@ for epoch in range(start_epoch, args.max_epochs):
                 save_folder + '/model_' + str(epoch))
 
             with torch.no_grad():
-                for curr_train_stage in ['train']:
+                for curr_train_stage in ['train', 'test']:
+
                     curr_loader = data_loaders_save[curr_train_stage]
                     output_sparse_images = torch.zeros_like(curr_img_stack[0, 0, ...].unsqueeze(0).unsqueeze(0),
                                                             device='cpu').repeat(len(curr_loader), 1, 1, 1)
+                    output_sparse_images_median = torch.zeros_like(curr_img_stack[0, 0, ...].unsqueeze(0).unsqueeze(0),
+                                                                   device='cpu').repeat(len(curr_loader), 1, 1, 1)
+                    output_raw_data = torch.zeros_like(curr_img_stack[0, 0, ...].unsqueeze(0).unsqueeze(0),
+                                                       device='cpu').repeat(len(curr_loader), 1, 1, 1)
+
                     for ix, curr_img_stack in enumerate(curr_loader):
                         curr_img_stack = curr_img_stack.to(device)
+
                         with autocast():
+                            # Compute the median subtraction background removal
+                            (median_background,
+                             _) = dataset_test.median if curr_train_stage == 'test' else dataset.median
+                            median_background = median_background.to(device)
+
+                            # Normalize
+                            median_background = normalize_type(median_background, args.norm_type, mean_imgs, std_images,
+                                                               max_images)
+
+                            # Perform median subtraction background removal
+                            sparse_part_median = F.relu(curr_img_stack - median_background)
+                            output_sparse_images_median[ix, ...] = sparse_part_median[0, 0,].detach().cpu()
+
                             # Predict dense part with the network
                             dense_part = F.relu(net(curr_img_stack))
 
                             # Compute sparse part
                             sparse_part = F.relu(curr_img_stack - dense_part)
                             output_sparse_images[ix, ...] = sparse_part[0, 0,].detach().cpu()
+
+                            output_raw_data[ix, ...] = curr_img_stack[0, 0,].detach().cpu()
+
                     save_image(output_sparse_images.permute(1, 0, 2, 3),
                                f'{save_folder}/Sparse_{curr_train_stage}_ep_{epoch}.tif')
+                    save_image(output_sparse_images_median.permute(1, 0, 2, 3),
+                               f'{save_folder}/Sparse_Median_{curr_train_stage}_ep_{epoch}.tif')
+                    save_image(output_raw_data.permute(1, 0, 2, 3),
+                               f'{save_folder}/Raw_Images_{curr_train_stage}_ep_{epoch}.tif')

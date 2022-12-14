@@ -4,11 +4,9 @@ from tifffile import imread
 import numpy as np
 import torch.nn.functional as F
 import multipagetiff as mtif
+import tensorflow as tf
+from utils.misc_utils import center_crop
 
-
-# TODO: delete comment
-# removed volume stuff, lenslet coords, subimage, depths, border_blanking, left sparse, left padding,
-# removed add_random_shot_noise_to_dataset
 
 class STORMDatasetFull(data.Dataset):
     def __init__(self, data_path, img_shape, images_to_use=None, load_sparse=False, temporal_shifts=[0, 1, 2],
@@ -29,6 +27,9 @@ class STORMDatasetFull(data.Dataset):
         self.img_dataset = imread(imgs_path, maxworkers=maxWorkers)
         n_frames, h, w = self.img_dataset.shape
 
+        # Calculate the median of the whole dataset
+        self.median = torch.from_numpy(self.img_dataset).median(dim=0)
+
         if self.load_sparse:
             try:
                 self.img_dataset_sparse = imread(imgs_path_sparse, maxworkers=maxWorkers)
@@ -44,7 +45,7 @@ class STORMDatasetFull(data.Dataset):
         n_images_to_load = max(images_to_use) + max(temporal_shifts) + 1
 
         # Create image storage
-        self.stacked_views = torch.zeros(n_images_to_load, self.img_shape[0], self.img_shape[1], dtype=torch.float16)
+        self.stacked_views = torch.zeros(n_images_to_load, self.img_shape[0], self.img_shape[1], dtype=torch.float32)
 
         if self.load_sparse:
             stacked_views_sparse = self.stacked_views.clone()
@@ -54,14 +55,15 @@ class STORMDatasetFull(data.Dataset):
             # Load the images indicated from the user
             curr_img = nImg  # images_to_use[nImg]
 
-            image = torch.from_numpy(np.array(self.img_dataset[curr_img, :, :]).astype(np.float16)).type(torch.float16)
+            image = torch.from_numpy(np.array(self.img_dataset[curr_img, :, :]).astype(np.float32)).type(torch.float32)
 
             image = self.pad_img_to_min(image)
+            # self.stacked_views[nImg, ...] = center_crop(image.unsqueeze(0).unsqueeze(0), self.img_shape)[0, 0, ...]
             self.stacked_views[nImg, ...] = image
 
             if self.load_sparse:
-                image = torch.from_numpy(np.array(self.img_dataset_sparse[curr_img, :, :]).astype(np.float16)).type(
-                    torch.float16)
+                image = torch.from_numpy(np.array(self.img_dataset_sparse[curr_img, :, :]).astype(np.float32)).type(
+                    torch.float32)
                 image = self.pad_img_to_min(image)
                 stacked_views_sparse[nImg, ...] = image
 
@@ -90,10 +92,10 @@ class STORMDatasetFull(data.Dataset):
     def get_statistics(self):
         """Get mean and standard deviation from images for normalization"""
         if self.load_sparse:
-            return self.stacked_views[..., 0].float().mean().type(self.stacked_views.type()), self.stacked_views[
-                ..., 0].float().std().type(self.stacked_views.type()), \
-                   self.stacked_views[..., 1].float().mean().type(self.stacked_views.type()), self.stacked_views[
-                       ..., 1].float().std().type(self.stacked_views.type())
+            return self.stacked_views[..., 0].float().mean().type(self.stacked_views.type()), \
+                   self.stacked_views[..., 0].float().std().type(self.stacked_views.type()), \
+                   self.stacked_views[..., 1].float().mean().type(self.stacked_views.type()), \
+                   self.stacked_views[..., 1].float().std().type(self.stacked_views.type())
         else:
             return self.stacked_views.float().mean().type(
                 self.stacked_views.type()), self.stacked_views.float().std().type(self.stacked_views.type())
