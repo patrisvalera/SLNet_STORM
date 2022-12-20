@@ -1,3 +1,4 @@
+import os
 from torch.utils import data
 from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 from torch.utils.tensorboard import SummaryWriter
@@ -128,6 +129,18 @@ dataset = STORMDatasetFull(args.data_folder, img_shape=2 * [args.img_size], imag
 
 dataset_test = STORMDatasetFull(args.data_folder_test, img_shape=2 * [args.img_size],
                                 images_to_use=args.images_to_use_test, load_sparse=False)
+
+os.mkdir(save_folder)
+
+# Perform the median subtraction background removal for the train and test dataset
+sparse_part_median = F.relu(dataset.stacked_views.unsqueeze(1).cpu() - dataset.median.cpu())
+save_image(sparse_part_median.permute(1, 0, 2, 3), f'{save_folder}/Sparse_Median_train.tif')
+sparse_part_median = F.relu(dataset_test.stacked_views.unsqueeze(1).cpu() - dataset_test.median.cpu())
+save_image(sparse_part_median.permute(1, 0, 2, 3), f'{save_folder}/Sparse_Median_test.tif')
+
+# Save the raw data that is currently used
+save_image(dataset.stacked_views.unsqueeze(1).permute(1, 0, 2, 3), f'{save_folder}/Raw_images_train.tif')
+save_image(dataset_test.stacked_views.unsqueeze(1).permute(1, 0, 2, 3), f'{save_folder}/Raw_images_test.tif')
 
 # Get normalization values
 max_images, max_images_sparse = dataset.get_max()
@@ -332,14 +345,15 @@ for epoch in range(start_epoch, args.max_epochs):
                         plt.title('Input')
                         plt.subplot(3, 4, 4 * n + 2)
                         plt.imshow(dense_crop[0, n, ...].detach().cpu().float().numpy())
-                        plt.title('Dense prediction')
+                        plt.title('Dense prediction', fontsize=11)
                         plt.subplot(3, 4, 4 * n + 3)
                         plt.imshow(sparse_crop[0, n, ...].detach().cpu().float().numpy())
-                        plt.title('Sparse prediction')
+                        plt.title('Sparse prediction', fontsize=11)
                         plt.subplot(3, 4, 4 * n + 4)
                         plt.imshow(Y[0, n, ...].detach().cpu().float().numpy())
                         plt.title('Y')
-                    plt.pause(0.1)
+                    plt.subplots_adjust(left=0.06, bottom=0.06, right=0.98, top=0.92, wspace=0.35, hspace=0.35)
+                    plt.pause(0.2)
                     plt.draw()
 
             if curr_train_stage == 'train':
@@ -452,40 +466,20 @@ for epoch in range(start_epoch, args.max_epochs):
                     curr_loader = data_loaders_save[curr_train_stage]
                     output_sparse_images = torch.zeros_like(curr_img_stack[0, 0, ...].unsqueeze(0).unsqueeze(0),
                                                             device='cpu').repeat(len(curr_loader), 1, 1, 1)
-                    output_sparse_images_median = torch.zeros_like(curr_img_stack[0, 0, ...].unsqueeze(0).unsqueeze(0),
-                                                                   device='cpu').repeat(len(curr_loader), 1, 1, 1)
-                    output_raw_data = torch.zeros_like(curr_img_stack[0, 0, ...].unsqueeze(0).unsqueeze(0),
-                                                       device='cpu').repeat(len(curr_loader), 1, 1, 1)
 
                     for ix, curr_img_stack in enumerate(curr_loader):
                         curr_img_stack = curr_img_stack.to(device)
 
                         with autocast():
-                            # Compute the median subtraction background removal
-                            (median_background,
-                             _) = dataset_test.median if curr_train_stage == 'test' else dataset.median
-                            median_background = median_background.to(device)
-
-                            # Normalize
-                            median_background = normalize_type(median_background, args.norm_type, mean_imgs, std_images,
-                                                               max_images)
-
-                            # Perform median subtraction background removal
-                            sparse_part_median = F.relu(curr_img_stack - median_background)
-                            output_sparse_images_median[ix, ...] = sparse_part_median[0, 0,].detach().cpu()
-
                             # Predict dense part with the network
                             dense_part = F.relu(net(curr_img_stack))
 
                             # Compute sparse part
                             sparse_part = F.relu(curr_img_stack - dense_part)
+                            # TODO: normalize back
+                            # sparse_part = normalize_type(sparse_part, args.norm_type, mean_imgs, std_images,
+                            #                              max_images, inverse=True)
                             output_sparse_images[ix, ...] = sparse_part[0, 0,].detach().cpu()
-
-                            output_raw_data[ix, ...] = curr_img_stack[0, 0,].detach().cpu()
-
                     save_image(output_sparse_images.permute(1, 0, 2, 3),
                                f'{save_folder}/Sparse_{curr_train_stage}_ep_{epoch}.tif')
-                    save_image(output_sparse_images_median.permute(1, 0, 2, 3),
-                               f'{save_folder}/Sparse_Median_{curr_train_stage}_ep_{epoch}.tif')
-                    save_image(output_raw_data.permute(1, 0, 2, 3),
-                               f'{save_folder}/Raw_Images_{curr_train_stage}_ep_{epoch}.tif')
+

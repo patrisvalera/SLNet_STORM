@@ -28,7 +28,7 @@ class STORMDatasetFull(data.Dataset):
         n_frames, h, w = self.img_dataset.shape
 
         # Calculate the median of the whole dataset
-        self.median = torch.from_numpy(self.img_dataset).median(dim=0)
+        self.median, self.indexes = torch.from_numpy(self.img_dataset).median(dim=0)
 
         if self.load_sparse:
             try:
@@ -131,7 +131,7 @@ class STORMDatasetFull(data.Dataset):
         return views_out
 
     @staticmethod
-    def read_tiff_stack(filename, out_datatype=torch.float16):
+    def read_tiff_stack(filename, out_datatype=torch.float32):
         tiffarray = mtif.read_stack(filename, units='voxels')
         try:
             max_val = torch.iinfo(out_datatype).max
