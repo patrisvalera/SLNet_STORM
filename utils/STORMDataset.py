@@ -28,7 +28,7 @@ class STORMDatasetFull(data.Dataset):
         n_frames, h, w = self.img_dataset.shape
 
         # Calculate the median of the whole dataset
-        self.median, self.indexes = torch.from_numpy(self.img_dataset).median(dim=0)
+        self.median, self.indexes = torch.from_numpy(self.img_dataset.astype(np.float32)).median(dim=0)
 
         if self.load_sparse:
             try:

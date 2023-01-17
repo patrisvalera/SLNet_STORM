@@ -20,13 +20,15 @@ data_dir = ""
 main_folder = "/space/valera/STORM"
 runs_dir = "/space/valera/STORM/runs"
 data_dir = "/space/valera/STORM/Datasets"
-# Real image 
-filename = "/space/valera/STORM/Datasets/DeepSTORM_dataset/STORM_image/STORM_image_stack.tif"
 
 # TODO: change (at the moment the same tiff and different index)
 dataset_paths = {
-    'storm_train': f'{data_dir}/DeepSTORM_dataset',
-    'storm_test': f'{data_dir}/DeepSTORM_dataset',
+    #'storm_train': f'{data_dir}/Tubulin_SOFI_2D_flip',
+    #'storm_test': f'{data_dir}/Tubulin_SOFI_2D_flip',
+    #'storm_train': f'{data_dir}/DeepSTORM_dataset',
+    #'storm_test': f'{data_dir}/DeepSTORM_dataset',
+    'storm_train': f'{data_dir}/Microtubules_Cell033',
+    'storm_test': f'{data_dir}/Microtubules_Cell033',
 }
 
 dataset_to_use = 'storm_train'
@@ -47,7 +49,7 @@ parser.add_argument('--checkpoint', nargs='?', default="", help='File path of ch
 # Images related arguments
 parser.add_argument('--images_to_use', nargs='+', type=int, default=list(range(0, 90, 1)),
                     help='Indexes of images to train on.')
-parser.add_argument('--images_to_use_test', nargs='+', type=int, default=list(range(91, 181, 1)),
+parser.add_argument('--images_to_use_test', nargs='+', type=int, default=list(range(91, 3000, 1)),
                     help='Indexes of images to test on.')
 parser.add_argument('--img_size', type=int, default=256, help='Side size of input image; square preferred.')
 # Training arguments
@@ -72,7 +74,7 @@ parser.add_argument('--dark_current_sparse', type=float, default=0, help='Dark c
 # Sparse decomposition arguments
 parser.add_argument('--n_frames', type=int, default=3, help='Number of frames used as input to the SLNet.')
 parser.add_argument('--rank', type=int, default=3, help='Rank enforcement for SVD. 6 is good')
-parser.add_argument('--SL_alpha_l1', type=float, default=0.1, help='Threshold value for alpha in sparse decomposition.')
+parser.add_argument('--SL_alpha_l1', type=float, default=12, help='Threshold value for alpha in sparse decomposition.')
 parser.add_argument('--SL_mu_sum_constraint', type=float, default=1e-2,
                     help='Threshold value for mu in sparse decomposition.')
 parser.add_argument('--weight_multiplier', type=float, default=0.5,
@@ -276,7 +278,6 @@ for epoch in range(start_epoch, args.max_epochs):
                     1)).item()
                 curr_img_stack = signal_power / curr_max * curr_img_stack
                 # Add noise
-                # TODO: needed?
                 curr_img_stack = pytorch_shot_noise.add_camera_noise(curr_img_stack)
                 curr_img_stack = curr_img_stack.to(device)
 
@@ -476,10 +477,11 @@ for epoch in range(start_epoch, args.max_epochs):
 
                             # Compute sparse part
                             sparse_part = F.relu(curr_img_stack - dense_part)
-                            # TODO: normalize back
-                            # sparse_part = normalize_type(sparse_part, args.norm_type, mean_imgs, std_images,
-                            #                              max_images, inverse=True)
+
+                            # de-normalization
+                            sparse_part = normalize_type(sparse_part, args.norm_type, mean_imgs, std_images,
+                                                         max_images, inverse=True)
+
                             output_sparse_images[ix, ...] = sparse_part[0, 0,].detach().cpu()
                     save_image(output_sparse_images.permute(1, 0, 2, 3),
                                f'{save_folder}/Sparse_{curr_train_stage}_ep_{epoch}.tif')
-
