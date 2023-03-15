@@ -14,20 +14,13 @@ from nets.SLNet import SLNet
 from utils.STORMDataset import STORMDatasetFull
 from utils.misc_utils import *
 
-
-main_folder = "/space/valera/STORM"
-runs_dir = "/space/valera/STORM/runs"
-data_dir = "/space/valera/STORM/Datasets"
+main_folder = "/STORM"
+runs_dir = "/STORM/runs"
+data_dir = "/STORM/Datasets"
 
 dataset_paths = {
-    # 'storm_train': f'{data_dir}/Tubulin_SOFI_2D_flip',
-    # 'storm_test': f'{data_dir}/Tubulin_SOFI_2D_flip',
-    # 'storm_train': f'{data_dir}/DeepSTORM_dataset',
-    # 'storm_test': f'{data_dir}/DeepSTORM_dataset',
-    'storm_train': f'{data_dir}/DeepSTORM_dataset/BIN4',
-    'storm_test': f'{data_dir}/DeepSTORM_dataset/BIN4',
-    'storm_train': f'{data_dir}/Microtubules_Cell033',
-    'storm_test': f'{data_dir}/Microtubules_Cell033',
+    'storm_train': f'{data_dir}/DeepSTORM_dataset',
+    'storm_test': f'{data_dir}/DeepSTORM_dataset',
 }
 
 dataset_to_use = 'storm_train'
@@ -73,7 +66,7 @@ parser.add_argument('--dark_current_sparse', type=float, default=0, help='Dark c
 # Sparse decomposition arguments
 parser.add_argument('--n_frames', type=int, default=3, help='Number of frames used as input to the SLNet.')
 parser.add_argument('--rank', type=int, default=3, help='Rank enforcement for SVD. 6 is good')
-parser.add_argument('--SL_alpha_l1', type=float, default=5, help='Threshold value for alpha in sparse decomposition.')
+parser.add_argument('--SL_alpha_l1', type=float, default=12, help='Threshold value for alpha in sparse decomposition.')
 parser.add_argument('--SL_mu_sum_constraint', type=float, default=1e-2,
                     help='Threshold value for mu in sparse decomposition.')
 parser.add_argument('--weight_multiplier', type=float, default=0.5,
@@ -237,9 +230,6 @@ zf.close()
 # timers
 start = torch.cuda.Event(enable_timing=True)
 end = torch.cuda.Event(enable_timing=True)
-end2 = torch.cuda.Event(enable_timing=True)
-start2 = torch.cuda.Event(enable_timing=True)
-start2.record()
 
 # Loop over epochs
 for epoch in range(start_epoch, args.max_epochs):
@@ -455,7 +445,7 @@ for epoch in range(start_epoch, args.max_epochs):
         print(str(epoch) + ' ' + curr_train_stage + " loss: " + str(mean_loss) + " eigenCrop: " + str(
             mean_eigen_crop) + " time: " + str(mean_time))  # , end="\r")
 
-        if epoch == 100:
+        if epoch % 25 == 0:
             torch.save({
                 'epoch': epoch,
                 'args': args,
@@ -490,5 +480,3 @@ for epoch in range(start_epoch, args.max_epochs):
                             output_sparse_images[ix, ...] = sparse_part[0, 0,].detach().cpu()
                     save_image(output_sparse_images.permute(1, 0, 2, 3),
                                f'{save_folder}/Sparse_{curr_train_stage}_ep_{epoch}.tif')
-end2.record()
-print(start2.elapsed_time(end2))
