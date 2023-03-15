@@ -2,25 +2,23 @@
 
 * [About the Project](#about)
 * [Requirements](#requirements)
-* [Network structure](#network-structure)
+* [Network Architecture](#network-architecture)
 * [Usage](#usage)
-  * [Train](#train)
-  * [Test](#train)
+  * [Train SLNet](#train)
 * [Acknowledgements](#acknowledgements)
 * [Sources](#sources)
-* [Citing this work](#citing-this-work)
 * [Contact](#contact)
 
 ## About
 Stochastic Optical Reconstruction Microscopy (STORM) images suffer from constant or autofluorescence background that reduces the quality of the reconstructed high-resolution image. Therefore, we present a background removal method for STORM images based on a sparse decomposition implemented with the help of the neural network SLNet. SLNet performs the decomposition by first computing the low-rank representation of a temporal stack of 3 raw images and then acquiring the sparse components, representing the frames without the background. Its training is done in an unsupervised manner with the help of a loss function.
-<img src="images/slnet_results.jpg">
+<img src="images/slnet_results.png">
 
 ## Requirements
 The repository is based on Python 3.7.4 and Pytorch 1.8, see requirements.txt for more details.
 
 ## Network Architecture
 SLNet is a simple convolutional neural network with two layers and one ReLU activation function. It grabs and processes k image stacks (3 by default) and computes their low-rank representation. The sparse images are computed as Sparse = ReLU(Input - Low_Rank). 
-<img src="images/slnet_arch.jpg">
+<img src="images/slnet_arch.png">
 
 ## Usage
   #### SLNet Input
