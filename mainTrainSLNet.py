@@ -4,7 +4,6 @@ from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda.amp import autocast, GradScaler
 import torch.nn as nn
-import subprocess
 from datetime import datetime
 import argparse
 import math
@@ -15,22 +14,13 @@ from nets.SLNet import SLNet
 from utils.STORMDataset import STORMDatasetFull
 from utils.misc_utils import *
 
-runs_dir = ""
-data_dir = ""
-main_folder = "/space/valera/STORM"
-runs_dir = "/space/valera/STORM/runs"
-data_dir = "/space/valera/STORM/Datasets"
+main_folder = "/STORM"
+runs_dir = "/STORM/runs"
+data_dir = "/STORM/Datasets"
 
-# TODO: change (at the moment the same tiff and different index)
 dataset_paths = {
-    # 'storm_train': f'{data_dir}/Tubulin_SOFI_2D_flip',
-    # 'storm_test': f'{data_dir}/Tubulin_SOFI_2D_flip',
-    # 'storm_train': f'{data_dir}/DeepSTORM_dataset',
-    # 'storm_test': f'{data_dir}/DeepSTORM_dataset',
-    # 'storm_train': f'{data_dir}/DeepSTORM_dataset/BIN4',
-    # 'storm_test': f'{data_dir}/DeepSTORM_dataset/BIN4',
-    'storm_train': f'{data_dir}/Microtubules_Cell033',
-    'storm_test': f'{data_dir}/Microtubules_Cell033',
+    'storm_train': f'{data_dir}/DeepSTORM_dataset',
+    'storm_test': f'{data_dir}/DeepSTORM_dataset',
 }
 
 dataset_to_use = 'storm_train'
@@ -51,7 +41,7 @@ parser.add_argument('--checkpoint', nargs='?', default="", help='File path of ch
 # Images related arguments
 parser.add_argument('--images_to_use', nargs='+', type=int, default=list(range(0, 100, 1)),
                     help='Indexes of images to train on.')
-parser.add_argument('--images_to_use_test', nargs='+', type=int, default=list(range(101, 4910, 1)),
+parser.add_argument('--images_to_use_test', nargs='+', type=int, default=list(range(101, 7000, 1)),
                     help='Indexes of images to test on.')
 parser.add_argument('--img_size', type=int, default=256, help='Side size of input image; square preferred.')
 # Training arguments
@@ -137,14 +127,18 @@ dataset_test = STORMDatasetFull(args.data_folder_test, img_shape=2 * [args.img_s
 os.mkdir(save_folder)
 
 # Perform the median subtraction background removal for the train and test dataset
-sparse_part_median = F.relu(dataset.stacked_views[0:len(args.images_to_use), :, :].unsqueeze(1).cpu() - dataset.median.cpu())
+sparse_part_median = F.relu(
+    dataset.stacked_views[0:len(args.images_to_use), :, :].unsqueeze(1).cpu() - dataset.median.cpu())
 save_image(sparse_part_median.permute(1, 0, 2, 3), f'{save_folder}/Sparse_Median_train.tif')
-sparse_part_median = F.relu(dataset_test.stacked_views[0:len(args.images_to_use_test), :, :].unsqueeze(1).cpu() - dataset_test.median.cpu())
+sparse_part_median = F.relu(
+    dataset_test.stacked_views[0:len(args.images_to_use_test), :, :].unsqueeze(1).cpu() - dataset_test.median.cpu())
 save_image(sparse_part_median.permute(1, 0, 2, 3), f'{save_folder}/Sparse_Median_test.tif')
 
 # Save the raw data that is currently used
-save_image(dataset.stacked_views[0:len(args.images_to_use), :, :].unsqueeze(1).permute(1, 0, 2, 3), f'{save_folder}/Raw_images_train.tif')
-save_image(dataset_test.stacked_views[0:len(args.images_to_use_test), :, :].unsqueeze(1).permute(1, 0, 2, 3), f'{save_folder}/Raw_images_test.tif')
+save_image(dataset.stacked_views[0:len(args.images_to_use), :, :].unsqueeze(1).permute(1, 0, 2, 3),
+           f'{save_folder}/Raw_images_train.tif')
+save_image(dataset_test.stacked_views[0:len(args.images_to_use_test), :, :].unsqueeze(1).permute(1, 0, 2, 3),
+           f'{save_folder}/Raw_images_test.tif')
 
 # Get normalization values
 max_images, max_images_sparse = dataset.get_max()
@@ -303,7 +297,6 @@ for epoch in range(start_epoch, args.max_epochs):
                 mean_time += end_time
 
                 # Compute sparse decomposition on a patch, as the full image doesn't fit in memory due to SVD
-                # TODO: change center?
                 center = 64
                 if curr_train_stage != 'train':
                     center = 32
