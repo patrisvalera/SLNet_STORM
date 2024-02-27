@@ -1,4 +1,5 @@
 # Sparsity-based background removal on STORM super-resolution images
+**Update**:**  The pre-print for the method is available on [arXiv](https://arxiv.org/abs/2401.07746) and the model is accessible on [Zenodo](https://zenodo.org/records/10659335). An updated version of the code is available [here](https://github.com/pvjosue/SLNet_STORM).
 
 * [About the Project](#about)
 * [Requirements](#requirements)
